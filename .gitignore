@@ -1,0 +1,9 @@
+.DS_Store
+build/labels
+build/size.dat
+bin/win/acme.exe
+bin/win/exobasic.exe
+bin/win/exomizer.exe
+bin/win/pucrunch.exe
+prgsize_src/.vs/
+prgsize_src/obj/
