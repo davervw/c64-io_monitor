@@ -106,6 +106,13 @@ display_counts
 
         pla ; restore index
         pha ; save index again
+        jsr disp_name
+
+        lda #$20 ; space
+        jsr chrout
+
+        pla ; restore index
+        pha ; save index again
         tax
         lda call_counts, x ; retrieve non-zero count again for display
         jsr disp_hex
@@ -152,6 +159,39 @@ disp_copyright
         bne -
 +       rts        
 
+disp_name
+        ldx #0
+-       ldy kernel_entries, x
+        beq ++
+        eor kernel_entries, x
+        beq +
+        eor kernel_entries, x
+
+        inx
+        inx
+        inx
+        inx
+        inx
+        inx
+        inx
+        inx
+        inx
+
+        bne -
+        beq ++
+
++       lda kernel_entries+7, x
+        sta $fb
+        lda kernel_entries+8, x
+        sta $fc
+        ldy #0
+-       lda ($fb),Y
+        beq ++
+        jsr chrout
+        iny
+        bne -
+++      rts
+
 hook_entries
         sei
         lda #$ff
@@ -169,12 +209,6 @@ hook_entries
         jsr disp_hex
         lda #$20
         jsr chrout
-;        lda ($FB),y
-;        jsr disp_hex
-;        lda #$20
-;        jsr chrout
-;        lda #$0D
-;        jsr chrout
 
         lda #$20
         inx
@@ -216,6 +250,8 @@ hook_entries
         adc #$00
         sta ($FB),y
 
+        inx
+        inx
         inx
         ldy #$00
         beq -
@@ -262,28 +298,28 @@ hook
         rts
 
 kernel_entries
-        !byte $CF, 00, 00, 00, 00, 00, 00
-        !byte $D2, 00, 00, 00, 00, 00, 00
-        !byte $A5, 00, 00, 00, 00, 00, 00
-        !byte $C6, 00, 00, 00, 00, 00, 00
-        !byte $C9, 00, 00, 00, 00, 00, 00
-        !byte $A8, 00, 00, 00, 00, 00, 00
-        !byte $E7, 00, 00, 00, 00, 00, 00
-        !byte $C3, 00, 00, 00, 00, 00, 00
-        !byte $CC, 00, 00, 00, 00, 00, 00
-        !byte $E4, 00, 00, 00, 00, 00, 00
-        !byte $B1, 00, 00, 00, 00, 00, 00
-        !byte $D5, 00, 00, 00, 00, 00, 00
-        !byte $C0, 00, 00, 00, 00, 00, 00
-        !byte $B7, 00, 00, 00, 00, 00, 00
-        !byte $D8, 00, 00, 00, 00, 00, 00
-        !byte $93, 00, 00, 00, 00, 00, 00
-        !byte $BA, 00, 00, 00, 00, 00, 00
-        !byte $BD, 00, 00, 00, 00, 00, 00
-        !byte $B4, 00, 00, 00, 00, 00, 00
-        !byte $96, 00, 00, 00, 00, 00, 00
-        !byte $AE, 00, 00, 00, 00, 00, 00
-        !byte $AB, 00, 00, 00, 00, 00, 00
+        !byte $A5, 00, 00, 00, 00, 00, 00, <n_acptr, >n_acptr
+        !byte $C6, 00, 00, 00, 00, 00, 00, <n_chkin, >n_chkin
+        !byte $C9, 00, 00, 00, 00, 00, 00, <n_chkout, >n_chkout
+        !byte $CF, 00, 00, 00, 00, 00, 00, <n_chrin, >n_chrin
+        !byte $D2, 00, 00, 00, 00, 00, 00, <n_chrout, >n_chrout
+        !byte $A8, 00, 00, 00, 00, 00, 00, <n_ciout, >n_ciout
+        !byte $E7, 00, 00, 00, 00, 00, 00, <n_clall, >n_clall
+        !byte $C3, 00, 00, 00, 00, 00, 00, <n_close, >n_close
+        !byte $CC, 00, 00, 00, 00, 00, 00, <n_clrchn, >n_clrchn
+        !byte $E4, 00, 00, 00, 00, 00, 00, <n_getin, >n_getin
+        !byte $B1, 00, 00, 00, 00, 00, 00, <n_listen, >n_listen
+        !byte $D5, 00, 00, 00, 00, 00, 00, <n_load, >n_load
+        !byte $C0, 00, 00, 00, 00, 00, 00, <n_open, >n_open
+        !byte $B7, 00, 00, 00, 00, 00, 00, <n_readst, >n_readst
+        !byte $D8, 00, 00, 00, 00, 00, 00, <n_save, >n_save
+        !byte $93, 00, 00, 00, 00, 00, 00, <n_second, >n_second
+        !byte $BA, 00, 00, 00, 00, 00, 00, <n_setlfs, >n_setlfs
+        !byte $BD, 00, 00, 00, 00, 00, 00, <n_setnam, >n_setnam
+        !byte $B4, 00, 00, 00, 00, 00, 00, <n_talk, >n_talk
+        !byte $96, 00, 00, 00, 00, 00, 00, <n_tksa, >n_tksa
+        !byte $AE, 00, 00, 00, 00, 00, 00, <n_unlsn, >n_unlsn
+        !byte $AB, 00, 00, 00, 00, 00, 00, <n_untlk, >n_untlk
         !byte 0
 
 call_counts ; indexed by $FFXX low byte of entry point, not all bytes are used, but very simple container
@@ -304,10 +340,55 @@ call_counts ; indexed by $FFXX low byte of entry point, not all bytes are used, 
         !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 
+n_acptr !text "ACPTR"
+        !byte 0
+n_chkin !text "CHKIN"
+        !byte 0
+n_chkout !text "CHKOUT"
+        !byte 0
+n_chrin !text "CHRIN"
+        !byte 0
+n_chrout !text "CHROUT"
+        !byte 0
+n_ciout !text "CIOUT"
+        !byte 0
+n_clall !text "CLALL"
+        !byte 0
+n_close !text "CLOSE"
+        !byte 0
+n_clrchn !text "CLRCHN"
+        !byte 0
+n_getin !text "GETIN"
+        !byte 0
+n_listen !text "LISTEN"
+        !byte 0
+n_load  !text "LOAD"
+        !byte 0
+n_open  !text "OPEN"
+        !byte 0
+n_readst !text "READST"
+        !byte 0
+n_save  !text "SAVE"
+        !byte 0
+n_second !text "SECOND"
+        !byte 0
+n_setlfs !text "SETLFS"
+        !byte 0
+n_setnam !text "SETNAM"
+        !byte 0
+n_talk  !text "TALK"
+        !byte 0
+n_tksa  !text "TKSA"
+        !byte 0
+n_unlsn !text "UNLSN"
+        !byte 0
+n_untlk !text "UNTALK"
+        !byte 0
+
 copyright 
         !byte 14 ; upper/lowercase character sets
         !byte 147 ; clear screen
-        !text "c64 io mONITOR 1.0"
+        !text "c64 io mONITOR 1.10"
         !byte 13 ; carriage return
         !text "(c) 2021 BY dAVID r. vAN wAGNER"
         !byte 13
