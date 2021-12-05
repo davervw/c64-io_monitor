@@ -22,35 +22,36 @@ chrout=$f1ca ;$ffd2
 
 init_hooks
         jsr bank_norm
-
         jsr disp_copyright
-
         jsr reset_counts
 
+        ; copy KERNEL $E000-$FFFF to RAM
         ldy #$00
         lda #$E0
         sty $FB
         sta $FC
-
 -       lda ($FB), y
         sta ($FB), Y
         iny
         bne -
         inc $FC
-        bne -
+        bne - ; stop at $0000
 
+        ; copy BASIC $A000-$BFFF to RAM
+        ; because there is no banking mode where BASIC is ROM, KERNEL is RAM
+        ; stuck copying both to RAM
         lda #$A0
         sta $FC
-
 -       lda ($FB), y
         sta ($FB), Y
         iny
         bne -
         inc $FC
         ldx $FC
-        cpx #$C0
+        cpx #$C0 ; stop at $C000
         bne -
 
+        ; change KERNEL JUMP TABLE in RAM so we get control for those entries
         jsr hook_entries
 
         lda #$05 ; BASIC/KERNEL ROMs replaced with RAM, leave I/O as is
@@ -65,25 +66,35 @@ reset_counts
         bne -
         rts
 
-bank_norm
+bank_norm ; bank 7
         lda $01
         ora #$07
         sta $01
         rts
 
-bank_ram
+bank_ram ; bank 0
         lda $01
         and #$f8
         sta $01
         rts
 
-bank_select
+bank_select ; bank from .A register
         sta $FB
         lda $01
         and #$f8
         ora $FB
         sta $01
         rts
+
+; bank  A000  D000  D800  E000
+; 0     RAM   RAM   RAM   RAM
+; 1     RAM   CHARG CHARG RAM
+; 2     RAM   CHARG CHARG ROM
+; 3     ROM   CHARG CHARG ROM
+; 4     RAM   RAM   RAM   RAM
+; 5     RAM   I/O   NYBLE RAM
+; 6     RAM   I/O   NYBLE ROM
+; 7     ROM   I/O   NYBLE ROM
 
 display_counts
         ldx #0 ; initialize index
@@ -159,14 +170,15 @@ disp_copyright
         bne -
 +       rts        
 
-disp_name
+disp_name ; INPUT .A is low byte of kernel jump table address $FFXX
         ldx #0
--       ldy kernel_entries, x
-        beq ++
-        eor kernel_entries, x
-        beq +
-        eor kernel_entries, x
+-       ldy kernel_entries, x   ; retrieve low byte to check for end
+        beq ++                  ; branch if end
+        eor kernel_entries, x   ; compare
+        beq +                   ; jump if found it
+        eor kernel_entries, x   ; restore .A
 
+        ; x+=9 skip size of non-matching entry record
         inx
         inx
         inx
@@ -177,19 +189,21 @@ disp_name
         inx
         inx
 
-        bne -
-        beq ++
+        jmp -                   ; continue looking
 
-+       lda kernel_entries+7, x
++       lda kernel_entries+7, x ; low byte of pointer to name string
         sta $fb
-        lda kernel_entries+8, x
+        lda kernel_entries+8, x ; high byte of pointer to name string
         sta $fc
+
+        ; display string
         ldy #0
 -       lda ($fb),Y
         beq ++
         jsr chrout
         iny
         bne -
+
 ++      rts
 
 hook_entries
@@ -264,7 +278,7 @@ hook_entries
         rts
 
 hook
-        php
+        php ; save flags and registers
         sei
         pha
         txa
@@ -272,23 +286,23 @@ hook
         tya
         pha
 
-        tsx
-        lda $105, x
-        sec
-        sbc #$03
-        sta $fb
-        lda $106, x
-        sbc #$00
-        sta $fc
-        ldy #0
-        lda ($fb),y
-        tax
+        tsx ; caller trail is on the stack, so transfer stack index to X for our use
+        lda $105, x ; get the low byte of the return to caller, should be our code in kernel_entries
+        sec ; prepare to subtract, no borrow yet
+        sbc #$03 ; subtract 3 to compute a pointer of our record of the low byte of the kernel vector $FFXX 
+        sta $fb ; save low byte in zero page pointer
+        lda $106, x ; get high byte
+        sbc #$00 ; account for subtraction borrow
+        sta $fc ; save high byte in zero page pointer
+        ldy #0 ; prep for dereferencing
+        lda ($fb),y ; dereference pointer to get the $FFXX low byte
+        tax ; going to use it as an index
         inc call_counts, x
-        bne +
-        dec call_counts, x ; return to max value
-+       inc $d020
+        bne + ; branch not zero
+        dec call_counts, x ; oops, on overflow to zero, return to max value
++       inc $d020 ; toggle border color showing something is happening
 
-        pla
+        pla ; restore registers and flags
         tay
         pla
         tax
