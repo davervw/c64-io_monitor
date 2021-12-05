@@ -402,7 +402,7 @@ n_untlk !text "UNTALK"
 copyright 
         !byte 14 ; upper/lowercase character sets
         !byte 147 ; clear screen
-        !text "c64 io mONITOR 1.10"
+        !text "c64 io mONITOR 1.11"
         !byte 13 ; carriage return
         !text "(c) 2021 BY dAVID r. vAN wAGNER"
         !byte 13
