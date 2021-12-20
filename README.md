@@ -17,9 +17,12 @@ see what Kernel I/O calls are made when you make a syntax error.
 Usage:
 
     LOAD "0:*",8,1
+    POKE 56,128 : REM RESERVE 8K FOR LOG
     NEW
     SYS 49152 : REM INITIALIZE HOOKS
     SYS 49155 : DISPLAY COUNTS
+    SYS 49158 : DISPLAY LOG
+    REM STOP + RESTORE TO STOP
 
 Example:
 ![Example screenshot](c64-io_monitor.png)
