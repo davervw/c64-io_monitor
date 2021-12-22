@@ -478,7 +478,7 @@ log_inputs
         pha
 
         jsr get_flags
-        and #$01
+        and #$01 ; A INPUT
         beq +
         jsr get_pushed_a
         tax
@@ -501,33 +501,37 @@ log_inputs
         pla
         jsr log_char
 
-+       pla ; restore .X from stack and re-save
-        tax
-        pha
-        jsr get_flags
-        and #$02
++       jsr get_flags
+        and #$02 ; X INPUT
         beq +
         jsr get_pushed_x
         tax
         lda #'X'
         jsr log_register
 
-+       pla ; restore .X from stack and re-save
-        tax
-        pha
-        jsr get_flags
-        and #$04
++       jsr get_flags
+        and #$04 ; Y INPUT
         beq +
         jsr get_pushed_y
         tax
         lda #'Y'
         jsr log_register
 
-+       pla ; restore .X from stack and re-save
-        tax
-        pha
-        jsr get_flags
-        and #$10
++       jsr get_flags
+        and #$08 ; LOAD input format, conditional on zero SA
+        beq +
+        lda $B9 ; SA
+        bne +
+        ldx #<xy_addr
+        ldy #>xy_addr
+        jsr log_string
+        jsr get_pushed_y
+        jsr log_hex
+        jsr get_pushed_x
+        jsr log_hex
+
++       jsr get_flags
+        and #$10 ; SAVE input format
         beq +
         ldx #<a_deref
         ldy #>a_deref
@@ -705,7 +709,7 @@ kernel_entries
 ; $01 = display .A input
 ; $02 = display .X input
 ; $04 = display .Y input
-; $08 = LOAD flag - display .X/.Y if SA=0
+; $08 = LOAD flag - display .X/.Y if SA zero
 ; $10 = SAVE flag - display indirect address zero page from .A
 ; $20 = display .Y output
 ; $40 = display .X output
@@ -818,7 +822,7 @@ xy_addr !text " XY="
 copyright_usage
         !byte 14 ; upper/lowercase character sets
         !byte 147 ; clear screen
-        !text "c64 io mONITOR 1.22"
+        !text "c64 io mONITOR 1.23"
         !byte 13 ; carriage return
         !text "(c) 2021 BY dAVID r. vAN wAGNER"
         !byte 13
