@@ -266,6 +266,7 @@ get_name ; INPUT .A is low byte of kernel jump table address $FFXX
 
 disp_name ; INPUT .A is low byte of kernel jump table address $FFXX
         jsr get_name ; get address in .X/.Y
+
 disp_string
         stx $fb
         sty $fc
@@ -280,6 +281,25 @@ disp_string
         bne -
 
 ++      rts
+
+log_string_n
+        sta log_string_length
+        stx log_string_load+1
+        sty log_string_load+2
+        ora #0
+        beq +
+
+        ldy #0
+        sty log_string_index
+log_string_load
+        lda $0000,y
+        jsr log_char
+        inc log_string_index
+        ldy log_string_index
+        dec log_string_length
+        bne log_string_load
+
++       rts
 
 hook_entries
         sei
@@ -468,7 +488,7 @@ log_inputs
         pla ; restore .X from stack and re-save
         tax
         pha
-        cpx #$D2
+        cpx #$D2 ; CHROUT
         bne +
         jsr get_pushed_a
         cmp #$7E
@@ -502,6 +522,27 @@ log_inputs
         tax
         lda #'Y'
         jsr log_register
+
++       pla ; restore .X from stack and re-save
+        tax
+        pha
+        cpx #$BD ; SETNAM
+        bne +
+        lda #' '
+        jsr log_char
+        lda #0x22 ; double quote
+        jsr log_char
+        jsr get_pushed_a
+        sta $fb
+        jsr get_pushed_x
+        sta $fc
+        jsr get_pushed_y
+        tay
+        ldx $fc
+        lda $fb
+        jsr log_string_n
+        lda #0x22 ; double quote
+        jsr log_char
 
 +       pla ; restore .X from stack
         tax
@@ -731,13 +772,16 @@ log_busy !byte 0
 log_ptr !byte 0, 0
 log_rem !byte 0, 0
 
+log_string_length !byte 0
+log_string_index !byte 0
+
 bytes_free !text " log bytes free"
         !byte 13, 0
 
 copyright 
         !byte 14 ; upper/lowercase character sets
         !byte 147 ; clear screen
-        !text "c64 io mONITOR 1.20"
+        !text "c64 io mONITOR 1.21"
         !byte 13 ; carriage return
         !text "(c) 2021 BY dAVID r. vAN wAGNER"
         !byte 13
