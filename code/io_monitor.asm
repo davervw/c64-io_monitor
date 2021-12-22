@@ -25,7 +25,7 @@ chrout=$f1ca ;$ffd2
 
 init_hooks
         jsr bank_norm
-        jsr disp_copyright
+        jsr disp_copyright_usage
         jsr reset_counts
 
         ; copy KERNEL $E000-$FFFF to RAM
@@ -229,9 +229,9 @@ disp_digit
         jmp chrout
 ++      rts        
 
-disp_copyright
-        ldx #<copyright
-        ldy #>copyright
+disp_copyright_usage
+        ldx #<copyright_usage
+        ldy #>copyright_usage
         jmp disp_string
 
 get_name ; INPUT .A is low byte of kernel jump table address $FFXX
@@ -526,6 +526,36 @@ log_inputs
 +       pla ; restore .X from stack and re-save
         tax
         pha
+        jsr get_flags
+        and #$10
+        beq +
+        ldx #<a_deref
+        ldy #>a_deref
+        jsr log_string
+        jsr get_pushed_a
+        sta $fb
+        ldy #0
+        sty $fc
+        iny
+        lda ($fb),y
+        jsr log_hex        
+        jsr get_pushed_a
+        sta $fb
+        ldy #0
+        sty $fc
+        lda ($fb),y
+        jsr log_hex
+        ldx #<xy_addr
+        ldy #>xy_addr
+        jsr log_string
+        jsr get_pushed_y
+        jsr log_hex
+        jsr get_pushed_x
+        jsr log_hex
+
++       pla ; restore .X from stack and re-save
+        tax
+        pha
         cpx #$BD ; SETNAM
         bne +
         lda #' '
@@ -670,7 +700,7 @@ log_digit
 ++      rts        
 
 kernel_entries
-; offset, 3 bytes for JSR code to hook, 3 bytes for original code, 2 byte name of routine, and diag bit flags
+; offset, 3 bytes for JSR code to hook, 3 bytes for original code(JMP or JMP(), 2 byte name of routine, and diag bit flags
 ; diag bit flags
 ; $01 = display .A input
 ; $02 = display .X input
@@ -680,31 +710,32 @@ kernel_entries
 ; $20 = display .Y output
 ; $40 = display .X output
 ; $80 = display .A output
-        !byte $A5, 00, 00, 00, 00, 00, 00, <n_acptr, >n_acptr, $80
-        !byte $C6, 00, 00, 00, 00, 00, 00, <n_chkin, >n_chkin, $02
+        ;   $FFxx,JSR,<hk,>hk,JMP,<ad,>ad, <name,    >name,    diag_flags
+        !byte $A5, 00, 00, 00, 00, 00, 00, <n_acptr,  >n_acptr,  $80
+        !byte $C6, 00, 00, 00, 00, 00, 00, <n_chkin,  >n_chkin,  $02
         !byte $C9, 00, 00, 00, 00, 00, 00, <n_chkout, >n_chkout, $02
-        !byte $CF, 00, 00, 00, 00, 00, 00, <n_chrin, >n_chrin, $80
+        !byte $CF, 00, 00, 00, 00, 00, 00, <n_chrin,  >n_chrin,  $80
         !byte $D2, 00, 00, 00, 00, 00, 00, <n_chrout, >n_chrout, $01
-        !byte $A8, 00, 00, 00, 00, 00, 00, <n_ciout, >n_ciout, $00
-        !byte $E7, 00, 00, 00, 00, 00, 00, <n_clall, >n_clall, $00
-        !byte $C3, 00, 00, 00, 00, 00, 00, <n_close, >n_close, $01
+        !byte $A8, 00, 00, 00, 00, 00, 00, <n_ciout,  >n_ciout,  $00
+        !byte $E7, 00, 00, 00, 00, 00, 00, <n_clall,  >n_clall,  $00
+        !byte $C3, 00, 00, 00, 00, 00, 00, <n_close,  >n_close,  $01
         !byte $CC, 00, 00, 00, 00, 00, 00, <n_clrchn, >n_clrchn, $00
-        !byte $E4, 00, 00, 00, 00, 00, 00, <n_getin, >n_getin, $80
+        !byte $E4, 00, 00, 00, 00, 00, 00, <n_getin,  >n_getin,  $80
         !byte $B1, 00, 00, 00, 00, 00, 00, <n_listen, >n_listen, $01
-        !byte $D5, 00, 00, 00, 00, 00, 00, <n_load, >n_load, $69
-        !byte $C0, 00, 00, 00, 00, 00, 00, <n_open, >n_open, $00
+        !byte $D5, 00, 00, 00, 00, 00, 00, <n_load,   >n_load,   $69
+        !byte $C0, 00, 00, 00, 00, 00, 00, <n_open,   >n_open,   $00
         !byte $B7, 00, 00, 00, 00, 00, 00, <n_readst, >n_readst, $80
-        !byte $D8, 00, 00, 00, 00, 00, 00, <n_save, >n_save, $16
+        !byte $D8, 00, 00, 00, 00, 00, 00, <n_save,   >n_save,   $10
         !byte $93, 00, 00, 00, 00, 00, 00, <n_second, >n_second, $01
         !byte $BA, 00, 00, 00, 00, 00, 00, <n_setlfs, >n_setlfs, $07
         !byte $BD, 00, 00, 00, 00, 00, 00, <n_setnam, >n_setnam, $20
-        !byte $B4, 00, 00, 00, 00, 00, 00, <n_talk, >n_talk, $01
-        !byte $96, 00, 00, 00, 00, 00, 00, <n_tksa, >n_tksa, $00
-        !byte $AE, 00, 00, 00, 00, 00, 00, <n_unlsn, >n_unlsn, $00
-        !byte $AB, 00, 00, 00, 00, 00, 00, <n_untlk, >n_untlk, $00
-        !byte 0
+        !byte $B4, 00, 00, 00, 00, 00, 00, <n_talk,   >n_talk,   $01
+        !byte $96, 00, 00, 00, 00, 00, 00, <n_tksa,   >n_tksa,   $00
+        !byte $AE, 00, 00, 00, 00, 00, 00, <n_unlsn,  >n_unlsn,  $00
+        !byte $AB, 00, 00, 00, 00, 00, 00, <n_untlk,  >n_untlk,  $00
+        !byte 0 ; end of table marker
 
-call_counts ; indexed by $FFXX low byte of entry point, not all bytes are used, but very simple container
+call_counts ; indexed by $FFXX low byte of entry point, not all bytes are used, but very simple container (256 bytes)
         !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -778,10 +809,16 @@ log_string_index !byte 0
 bytes_free !text " log bytes free"
         !byte 13, 0
 
-copyright 
+a_deref !text " [A]="
+        !byte 0
+
+xy_addr !text " XY="
+        !byte 0
+
+copyright_usage
         !byte 14 ; upper/lowercase character sets
         !byte 147 ; clear screen
-        !text "c64 io mONITOR 1.21"
+        !text "c64 io mONITOR 1.22"
         !byte 13 ; carriage return
         !text "(c) 2021 BY dAVID r. vAN wAGNER"
         !byte 13
