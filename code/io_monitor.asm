@@ -489,7 +489,10 @@ log_inputs
         jsr get_pushed_a
         jsr conditional_log_char
 
-+       jsr get_flags
++       pla
+        tax
+        pha 
+        jsr get_flags
         and #$02 ; X INPUT
         beq +
         jsr get_pushed_x
@@ -497,7 +500,10 @@ log_inputs
         lda #'X'
         jsr log_register
 
-+       jsr get_flags
++       pla
+        tax
+        pha
+        jsr get_flags
         and #$04 ; Y INPUT
         beq +
         jsr get_pushed_y
@@ -505,7 +511,10 @@ log_inputs
         lda #'Y'
         jsr log_register
 
-+       jsr get_flags
++       pla
+        tax
+        pha 
+        jsr get_flags
         and #$08 ; LOAD input format, conditional on zero SA
         beq +
         lda $B9 ; SA
@@ -518,7 +527,11 @@ log_inputs
         jsr get_pushed_x
         jsr log_hex
 
-+       jsr get_flags
++       
+        pla
+        tax
+        pha
+        jsr get_flags
         and #$10 ; SAVE input format
         beq +
         ldx #<a_deref
@@ -901,7 +914,7 @@ xy_addr !text " XY="
 copyright_usage
         !byte 14 ; upper/lowercase character sets
         !byte 147 ; clear screen
-        !text "c64 io mONITOR 1.24"
+        !text "c64 io mONITOR 1.25"
         !byte 13 ; carriage return
         !text "(c) 2021 BY dAVID r. vAN wAGNER"
         !byte 13
