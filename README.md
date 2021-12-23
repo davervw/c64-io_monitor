@@ -4,14 +4,15 @@ Author: [David R. Van Wagner](http://techwithdave.davevw.com "David R. Van Wagne
 
 6502 Assembly project to monitor C64 Kernel I/O entry points usage.
 
-Initially hooks entry points and increments counts as Kernel
-calls are made, with max count of 255 each.  Works by copying
-C64 ROMs to RAM, patching RAM, and running from RAM (no, it
-doesn't patch lower memory indirect jumps because not all
-entry points in C64 Kernel use this method).
+Hooks entry points and increments counts as Kernel calls are made, 
+with max count of 255 each.  Works by copying C64 ROMs to RAM, 
+patching RAM, and running from RAM (no, it doesn't patch lower 
+memory indirect jumps).  Optionally logs a trace of all individual
+calls with arguments and return values if memory is reserved
+(upper BASIC memory limit lowered prior to initializing).
 
 Common use is to perform operations in BASIC, then display
-counts to see what Kernel calls were made.  Interestingly,
+counts/trace to see what Kernel calls were made.  Interestingly,
 see what Kernel I/O calls are made when you make a syntax error.
 
 Usage:
