@@ -180,7 +180,7 @@ display_counts
         jsr chrout
 
         pla ; restore index
-        tax 
+        tax
 +       inx
         bne -
 
@@ -227,7 +227,7 @@ disp_digit
 +       sbc #$0A
         adc #$40
         jmp chrout
-++      rts        
+++      rts
 
 disp_copyright_usage
         ldx #<copyright_usage
@@ -323,11 +323,11 @@ hook_entries
         inx
         sta kernel_entries, x
 
-        lda #<hook        
+        lda #<hook_entry
         inx
         sta kernel_entries, x
 
-        lda #>hook      
+        lda #>hook_entry
         inx
         sta kernel_entries, x
 
@@ -373,7 +373,7 @@ hook_entries
 
         rts
 
-hook
+hook_entry
         php ; save flags and registers
         sei
         pha
@@ -385,14 +385,12 @@ hook
         lda log_busy
         bne +
         inc log_busy
-        
+
         jsr get_index
+        stx active_index
         jsr log_inputs
         jsr log_addr
-        jsr hook_return
-
-        lda #13
-        jsr log_char
+        jsr set_hook_return
 
         dec log_busy
 
@@ -401,11 +399,10 @@ hook
         pla
         tax
         pla
-        cli
         plp
         rts
 
-hook2
+hook_result
         php ; save flags and registers
         sei
         pha
@@ -414,7 +411,6 @@ hook2
         tya
         pha
 
-        jsr get_index
         jsr log_outputs
 
         pla ; restore registers and flags
@@ -422,7 +418,6 @@ hook2
         pla
         tax
         pla
-        cli
         plp
         rts
 
@@ -430,7 +425,7 @@ get_index
         tsx ; caller trail is on the stack, so transfer stack index to X for our use
         lda $107, x ; get the low byte of the return to caller, should be our code in kernel_entries
         sec ; prepare to subtract, no borrow yet
-        sbc #$03 ; subtract 3 to compute a pointer of our record of the low byte of the kernel vector $FFXX 
+        sbc #$03 ; subtract 3 to compute a pointer of our record of the low byte of the kernel vector $FFXX
         sta $fb ; save low byte in zero page pointer
         lda $108, x ; get high byte
         sbc #$00 ; account for subtraction borrow
@@ -443,7 +438,7 @@ get_index
         dec call_counts, x ; oops, on overflow to zero, return to max value
 +       inc $d020 ; toggle border color showing something is happening
         rts
-        
+
 get_pushed_a
         tsx ; saved registers are on the stack, so transfer stack index to X for our use
         lda $108, x ; get the low byte of the return to caller, should be our code in kernel_entries
@@ -469,6 +464,7 @@ get_flags ; input .X index
         adc #10
         tay
         bcc -
+        lda #0
         bcs ++
 +       lda kernel_entries+9,Y
 ++      rts
@@ -485,21 +481,13 @@ log_inputs
         lda #'A'
         jsr log_register
 
-        pla ; restore .X from stack and re-save
++       pla ; restore .X from stack and re-save
         tax
         pha
         cpx #$D2 ; CHROUT
         bne +
         jsr get_pushed_a
-        cmp #$7E
-        bcs +
-        cmp #$1F
-        bcc +
-        pha
-        lda #' '
-        jsr log_char
-        pla
-        jsr log_char
+        jsr conditional_log_char
 
 +       jsr get_flags
         and #$02 ; X INPUT
@@ -542,7 +530,7 @@ log_inputs
         sty $fc
         iny
         lda ($fb),y
-        jsr log_hex        
+        jsr log_hex
         jsr get_pushed_a
         sta $fb
         ldy #0
@@ -583,9 +571,86 @@ log_inputs
 
         rts
 
-log_outputs rts
+log_outputs
+        pha ; need something on stack
 
-hook_return rts
+        ldx active_index
+        cpx #$D5 ; special case for LOAD
+        bne +
+        ldx #<xy_addr
+        ldy #>xy_addr
+        jsr log_string
+        jsr get_pushed_y
+        jsr log_hex
+        jsr get_pushed_x
+        jsr log_hex
+        jmp ++
+
++       jsr get_flags
+        and #$80
+        beq +
+        jsr get_pushed_a
+        tax
+        lda #'A'
+        jsr log_register
+
++       ldx active_index
+        cpx #$CF ; special case CHARIN
+        bne +
+        jsr get_pushed_a
+        jsr conditional_log_char
+
++       ldx active_index
+        jsr get_flags
+        and #$40
+        beq +
+        jsr get_pushed_x
+        tax
+        lda #'X'
+        jsr log_register
+
++       ldx active_index
+        jsr get_flags
+        and #$20
+        beq +
+        jsr get_pushed_y
+        tax
+        lda #'Y'
+        jsr log_register
+
+++
++       lda #13
+        jsr log_char
+
+        pla ; fix stack pointer
+        rts
+
+set_hook_return ; insert our desired return address hook on the stack at just the right spot
+        tsx
+        dex
+        stx $fb
+        inx
+        inx
+        stx $fd
+        lda #$01
+        sta $fc
+        sta $fe
+        ldy #0
+-       lda ($fd),y
+        sta ($fb),y
+        iny
+        cpy #8
+        bne -
+        lda #<hook_result-1
+        sta ($fb),y
+        lda #>hook_result-1
+        iny
+        sta ($fb),y
+        tsx
+        dex
+        dex
+        txs
+        rts
 
 log_register
         tay ; save .X to stack, then .A
@@ -631,7 +696,19 @@ log_string
 +       iny
         bne -
 ++      rts
-        
+
+conditional_log_char
+        cmp #$7E
+        bcs +
+        cmp #$1F
+        bcc +
+        pha
+        lda #' '
+        jsr log_char
+        pla
+        jsr log_char
++       rts
+
 log_char
         ldx log_rem+1
         bne +
@@ -651,11 +728,11 @@ log_char
         dec log_rem+1
 ++      rts
 
-log_addr ; low address of hook in X
+log_addr ; low address of hook_entry in X
         txa     ; save X to stack twice
         pha
         pha
-        
+
         lda #' '
         jsr log_char
 
@@ -701,10 +778,10 @@ log_digit
 +       sbc #$0A
         adc #$40
         jmp log_char
-++      rts        
+++      rts
 
 kernel_entries
-; offset, 3 bytes for JSR code to hook, 3 bytes for original code(JMP or JMP(), 2 byte name of routine, and diag bit flags
+; offset, 3 bytes for JSR code to hook_entry, 3 bytes for original code(JMP or JMP(), 2 byte name of routine, and diag bit flags
 ; diag bit flags
 ; $01 = display .A input
 ; $02 = display .X input
@@ -732,7 +809,7 @@ kernel_entries
         !byte $D8, 00, 00, 00, 00, 00, 00, <n_save,   >n_save,   $10
         !byte $93, 00, 00, 00, 00, 00, 00, <n_second, >n_second, $01
         !byte $BA, 00, 00, 00, 00, 00, 00, <n_setlfs, >n_setlfs, $07
-        !byte $BD, 00, 00, 00, 00, 00, 00, <n_setnam, >n_setnam, $20
+        !byte $BD, 00, 00, 00, 00, 00, 00, <n_setnam, >n_setnam, $00
         !byte $B4, 00, 00, 00, 00, 00, 00, <n_talk,   >n_talk,   $01
         !byte $96, 00, 00, 00, 00, 00, 00, <n_tksa,   >n_tksa,   $00
         !byte $AE, 00, 00, 00, 00, 00, 00, <n_unlsn,  >n_unlsn,  $00
@@ -807,6 +884,8 @@ log_busy !byte 0
 log_ptr !byte 0, 0
 log_rem !byte 0, 0
 
+active_index !byte 0
+
 log_string_length !byte 0
 log_string_index !byte 0
 
@@ -822,7 +901,7 @@ xy_addr !text " XY="
 copyright_usage
         !byte 14 ; upper/lowercase character sets
         !byte 147 ; clear screen
-        !text "c64 io mONITOR 1.23"
+        !text "c64 io mONITOR 1.24"
         !byte 13 ; carriage return
         !text "(c) 2021 BY dAVID r. vAN wAGNER"
         !byte 13
