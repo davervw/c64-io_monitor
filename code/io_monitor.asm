@@ -7,7 +7,7 @@
 ; MIT LICENSE
 ;
 ;
-; hooks C64 kernel entry points via modifying entry points after copying ROM to RAM, running Kernel/BASIC in RAM
+; hooks C64 kernal entry points via modifying entry points after copying ROM to RAM, running Kernal/BASIC in RAM
 ;
 ; SYS 49152: REM initialize hooks and then running system from RAM (note can call again to clear out counts)
 ;   also sets log destination past BASIC program's RAM (55/56) if room before $A000
@@ -153,7 +153,7 @@ display_counts
         txa
         pha ; save index to stack
 
-        ; display kernel address
+        ; display kernal address
         lda #$ff
         jsr disp_hex
         pla ; restore index
@@ -234,14 +234,14 @@ disp_copyright_usage
         ldy #>copyright_usage
         jmp disp_string
 
-get_name ; INPUT .A is low byte of kernel jump table address $FFXX
+get_name ; INPUT .A is low byte of kernal jump table address $FFXX
          ; OUTPUT .X is low byte of name address, .Y is high byte of name address
         ldx #0
--       ldy kernel_entries, x   ; retrieve low byte to check for end
+-       ldy kernal_entries, x   ; retrieve low byte to check for end
         beq ++                  ; branch if end
-        eor kernel_entries, x   ; compare
+        eor kernal_entries, x   ; compare
         beq +                   ; jump if found it
-        eor kernel_entries, x   ; restore .A
+        eor kernal_entries, x   ; restore .A
 
         ; x+=10 skip size of non-matching entry record
         inx
@@ -257,14 +257,14 @@ get_name ; INPUT .A is low byte of kernel jump table address $FFXX
 
         jmp -                   ; continue looking
 
-+       lda kernel_entries+8, x ; high byte of pointer to name string
++       lda kernal_entries+8, x ; high byte of pointer to name string
         tay
-        lda kernel_entries+7, x ; low byte of pointer to name string
+        lda kernal_entries+7, x ; low byte of pointer to name string
         tax
 
         rts
 
-disp_name ; INPUT .A is low byte of kernel jump table address $FFXX
+disp_name ; INPUT .A is low byte of kernal jump table address $FFXX
         jsr get_name ; get address in .X/.Y
 
 disp_string
@@ -308,7 +308,7 @@ hook_entries
 
         ldy #0
         ldx #0
--       lda kernel_entries, x
+-       lda kernal_entries, x
         beq +
 
         sta $FB
@@ -321,40 +321,40 @@ hook_entries
 
         lda #$20
         inx
-        sta kernel_entries, x
+        sta kernal_entries, x
 
         lda #<hook_entry
         inx
-        sta kernel_entries, x
+        sta kernal_entries, x
 
         lda #>hook_entry
         inx
-        sta kernel_entries, x
+        sta kernal_entries, x
 
         lda ($FB),y
         inx
-        sta kernel_entries, x
+        sta kernal_entries, x
         lda #$4C
         sta ($FB),y
 
         iny
         lda ($FB),y
         inx
-        sta kernel_entries, x
+        sta kernal_entries, x
         txa
         sec
         sbc #$04
         clc
-        adc #<kernel_entries
+        adc #<kernal_entries
         php
         sta ($FB),y
 
         iny
         lda ($FB),y
         inx
-        sta kernel_entries, x
+        sta kernal_entries, x
         clc
-        lda #>kernel_entries
+        lda #>kernal_entries
         plp
         adc #$00
         sta ($FB),y
@@ -423,9 +423,9 @@ hook_result
 
 get_index
         tsx ; caller trail is on the stack, so transfer stack index to X for our use
-        lda $107, x ; get the low byte of the return to caller, should be our code in kernel_entries
+        lda $107, x ; get the low byte of the return to caller, should be our code in kernal_entries
         sec ; prepare to subtract, no borrow yet
-        sbc #$03 ; subtract 3 to compute a pointer of our record of the low byte of the kernel vector $FFXX
+        sbc #$03 ; subtract 3 to compute a pointer of our record of the low byte of the kernal vector $FFXX
         sta $fb ; save low byte in zero page pointer
         lda $108, x ; get high byte
         sbc #$00 ; account for subtraction borrow
@@ -441,23 +441,23 @@ get_index
 
 get_pushed_a
         tsx ; saved registers are on the stack, so transfer stack index to X for our use
-        lda $108, x ; get the low byte of the return to caller, should be our code in kernel_entries
+        lda $108, x ; get the low byte of the return to caller, should be our code in kernal_entries
         rts
 
 get_pushed_x
         tsx ; saved registers are on the stack, so transfer stack index to X for our use
-        lda $107, x ; get the low byte of the return to caller, should be our code in kernel_entries
+        lda $107, x ; get the low byte of the return to caller, should be our code in kernal_entries
         rts
 
 get_pushed_y
         tsx ; saved registers are on the stack, so transfer stack index to X for our use
-        lda $106, x ; get the low byte of the return to caller, should be our code in kernel_entries
+        lda $106, x ; get the low byte of the return to caller, should be our code in kernal_entries
         rts
 
 get_flags ; input .X index
         ldy #0
 -       txa
-        cmp kernel_entries, y
+        cmp kernal_entries, y
         beq +
         tya
         clc
@@ -466,11 +466,11 @@ get_flags ; input .X index
         bcc -
         lda #0
         bcs ++
-+       lda kernel_entries+9,Y
++       lda kernal_entries+9,Y
 ++      rts
 
 log_inputs
-        txa ; save .X to stack (low address of hooked kernel entry)
+        txa ; save .X to stack (low address of hooked kernal entry)
         pha
 
         jsr get_flags
@@ -793,7 +793,7 @@ log_digit
         jmp log_char
 ++      rts
 
-kernel_entries
+kernal_entries
 ; offset, 3 bytes for JSR code to hook_entry, 3 bytes for original code(JMP or JMP(), 2 byte name of routine, and diag bit flags
 ; diag bit flags
 ; $01 = display .A input
@@ -914,7 +914,7 @@ xy_addr !text " XY="
 copyright_usage
         !byte 14 ; upper/lowercase character sets
         !byte 147 ; clear screen
-        !text "c64 io mONITOR 1.25"
+        !text "c64 io mONITOR 1.26"
         !byte 13 ; carriage return
         !text "(c) 2021 BY dAVID r. vAN wAGNER"
         !byte 13
@@ -928,7 +928,7 @@ copyright_usage
         !byte 13
         !text "poke 56,128 : clr : rem start of log"
         !byte 13
-        !text "sys 49152 : rem hook kernel entries"
+        !text "sys 49152 : rem hook kernal entries"
         !byte 13
         !text "sys 49155 : rem display counts"
         !byte 13
