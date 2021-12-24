@@ -31,3 +31,5 @@ Example:
 Produced with [ACME](https://sourceforge.net/projects/acme-crossass/ "ACME Cross-Assembler") and [https://github.com/Esshahn/acme-assembly-vscode-template](https://github.com/Esshahn/acme-assembly-vscode-template "acme-assembly-vscode-template")
 
 [Built C64 disk image is here](https://github.com/davervw/c64-io_monitor/raw/main/build/io_monitor.d64) and [PRG file is here](https://github.com/davervw/c64-io_monitor/raw/main/build/io_monitor.prg).
+
+More details at [blog.davevw.com article](https://techwithdave.davevw.com/2021/12/trace-c64-io-kernal-jump-table-calls.html)
