@@ -14,6 +14,8 @@
 ; SYS 49155: REM display hit counts
 ; SYS 49158: REM display log of hits
 ; SYS 49161: REM clear log
+; SYS 49164: REM set log start indirect ZP addr in x
+; SYS 49167: REM set log end addr in x,y
 
 start=$C000 ; machine language org
 chrout=$f1ca ;$ffd2
@@ -24,6 +26,8 @@ chrout=$f1ca ;$ffd2
         jmp display_counts
         jmp display_log
         jmp clear_log
+        jmp set_start
+        jmp set_end
 
 init_hooks
         jsr bank_norm
@@ -62,9 +66,11 @@ init_hooks
         jsr bank_select
 
         ; copy 55/56 to log_ptr, and compute space available (up to $A000) in log_rem
-        lda 55 ; low byte end of BASIC RAM (variables) area
+        log_lsb = * + 1
+        lda 55 ; initally, low byte end of BASIC RAM (variables) area
         sta log_start
-        lda 56 ; high byte end of BASIC RAM (variables) area
+        log_msb = * + 1
+        lda 56 ; initially, high byte end of BASIC RAM (variables) area
         sta log_start+1
 
 clear_log
@@ -74,10 +80,10 @@ clear_log
         sta log_ptr+1
         jsr reset_counts
         sec
-        lda #$00
+        lda log_end
         sbc log_start
         sta log_rem
-        lda #$A0
+        lda log_end+1
         sbc log_start+1
         bcs + ; greater than or equal to, okay
         lda #0 ; less than, zero out log_rem
@@ -868,6 +874,16 @@ log_digit
         jmp log_char
 ++      rts
 
+set_start
+        stx log_lsb
+        inx
+        stx log msb
+        rts
+set_end
+        stx log_end
+        sty log_end+1
+        rts
+
 kernal_entries
 ; offset, 3 bytes for JSR code to hook_entry, 3 bytes for original code(JMP or JMP(), 2 byte name of routine, and diag bit flags
 ; diag bit flags
@@ -972,7 +988,7 @@ log_busy !byte 0
 log_start !byte 0, 0
 log_ptr !byte 0, 0
 log_rem !byte 0, 0
-
+log_end !byte 0, $A0
 active_index !byte 0
 
 log_string_length !byte 0
