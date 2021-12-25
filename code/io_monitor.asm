@@ -85,6 +85,8 @@ clear_log
 +       sta log_rem+1
 
         ; display $abcd log bytes free
+        lda #18
+        jsr chrout
         lda #'$'
         jsr chrout
         lda log_rem+1
@@ -94,6 +96,8 @@ clear_log
         ldx #<bytes_free
         ldy #>bytes_free
         jsr disp_string
+        lda #146
+        jsr chrout
 
 ;clear memory of log
         lda log_rem+1
@@ -248,7 +252,7 @@ get_name ; INPUT .A is low byte of kernal jump table address $FFXX
 -       ldy kernal_entries, x   ; retrieve low byte to check for end
         beq ++                  ; branch if end
         eor kernal_entries, x   ; compare
-        beq +                   ; jump if found it
+        beq +                   ; branch if found it
         eor kernal_entries, x   ; restore .A
 
         ; x+=10 skip size of non-matching entry record
@@ -269,7 +273,10 @@ get_name ; INPUT .A is low byte of kernal jump table address $FFXX
         tay
         lda kernal_entries+7, x ; low byte of pointer to name string
         tax
+        rts
 
+++      ldx #<not_found_string
+        ldy #>not_found_string
         rts
 
 disp_name ; INPUT .A is low byte of kernal jump table address $FFXX
@@ -281,14 +288,30 @@ disp_string
 
         ldy #0
 -       lda ($fb),Y
-        beq ++
+        beq +
         jsr chrout
         iny
         bne -
         inc $fc
         bne -
 
-++      rts
++       rts
+
+len_string ; INPUT x/y is address of string, nul terminated
+        stx $fb
+        sty $fc
+
+        ldy #0
+-       lda ($fb),Y
+        beq +
+        iny
+        bne -
+
++       tya ; OUTPUT a is length in bytes (0 if overflow), x/y is restored
+        ldx $fb
+        ldy $fc
+        rts
+
 
 log_string_n
         sta log_string_length
@@ -320,12 +343,6 @@ hook_entries
         beq +
 
         sta $FB
-        lda $FC
-        jsr disp_hex
-        lda $FB
-        jsr disp_hex
-        lda #$20
-        jsr chrout
 
         lda #$20
         inx
@@ -376,10 +393,60 @@ hook_entries
 
 +       cli
 
-        lda #$0D
-        jsr chrout
+        jsr disp_hooks
 
         rts
+
+disp_hooks
+        ldx #0
+        stx $fd
+-       lda kernal_entries, x ; low byte of kernal jump table address $FFxx
+        beq + ; check if end of table
+
+        txa ; push x to stack for safe keeping
+        pha
+
+        lda #$ff
+        jsr disp_hex
+
+        lda kernal_entries, x ; display entry
+        jsr disp_hex
+        lda #' '
+        jsr chrout
+        lda kernal_entries+8, x ; high address of name
+        tay
+        lda kernal_entries+7, x ; low address of name
+        tax
+        jsr len_string
+        sta sublen+1    ; self-modifying code
+        jsr disp_string
+        inc $fd
+        lda $fd
+        cmp #3
+        bne ++
+        lda #13
+        jsr chrout
+        lda #0
+        sta $fd
+        jmp +++
+
+++      sec
+        lda #8          ; most are 6 or less
+sublen  sbc #0          ; subtract the length
+        tax
+        beq +++
+        lda #' '
+--      jsr chrout
+        dex
+        bne --
+
++++     pla ; restore x, advance by 10, loop
+        clc
+        adc #10
+        tax
+        bcc -
+
++       rts
 
 hook_entry
         php ; save flags and registers
@@ -920,11 +987,18 @@ a_deref !text " [A]="
 xy_addr !text " XY="
         !byte 0
 
+not_found_string !text "???"
+        !byte 0
+
 copyright_usage
         !byte 14 ; upper/lowercase character sets
         !byte 147 ; clear screen
-        !text "c64 io mONITOR 1.27"
+        !byte 18 ; reverse on
+        !text "c64 io mONITOR 1.28"
+        !byte 146 ; reverse off
         !byte 13 ; carriage return
+        !text "tRACE/COUNT kernal i/o JUMP TABLE CALLS"
+        !byte 13
         !text "(c) 2021 BY dAVID r. vAN wAGNER"
         !byte 13
         !text "DAVE@DAVEVW.COM"
