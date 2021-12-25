@@ -13,6 +13,7 @@
 ;   also sets log destination past BASIC program's RAM (55/56) if room before $A000
 ; SYS 49155: REM display hit counts
 ; SYS 49158: REM display log of hits
+; SYS 49161: REM clear log
 
 start=$C000 ; machine language org
 chrout=$f1ca ;$ffd2
@@ -22,11 +23,11 @@ chrout=$f1ca ;$ffd2
         jmp init_hooks
         jmp display_counts
         jmp display_log
+        jmp clear_log
 
 init_hooks
         jsr bank_norm
         jsr disp_copyright_usage
-        jsr reset_counts
 
         ; copy KERNEL $E000-$FFFF to RAM
         ldy #$00
@@ -62,15 +63,22 @@ init_hooks
 
         ; copy 55/56 to log_ptr, and compute space available (up to $A000) in log_rem
         lda 55 ; low byte end of BASIC RAM (variables) area
+        sta log_start
+        lda 56 ; high byte end of BASIC RAM (variables) area
+        sta log_start+1
+
+clear_log
+        lda log_start
         sta log_ptr
+        lda log_start+1
+        sta log_ptr+1
+        jsr reset_counts
         sec
         lda #$00
-        sbc 55
+        sbc log_start
         sta log_rem
-        lda 56 ; high byte end of BASIC RAM (variables) area
-        sta log_ptr+1
         lda #$A0
-        sbc 56
+        sbc log_start+1
         bcs + ; greater than or equal to, okay
         lda #0 ; less than, zero out log_rem
         sta log_rem
@@ -87,7 +95,7 @@ init_hooks
         ldy #>bytes_free
         jsr disp_string
 
-; clear log
+;clear memory of log
         lda log_rem+1
         beq + ; corner case, don't support clearing a single partial page
         tax
@@ -187,9 +195,9 @@ display_counts
         rts
 
 display_log
-        lda 55
+        lda log_start
         sta $fb
-        lda 56
+        lda log_start+1
         sta $fc
         ldy #0
 -       lda $fc
@@ -894,6 +902,7 @@ n_untlk !text "UNTALK"
 
 log_busy !byte 0
 
+log_start !byte 0, 0
 log_ptr !byte 0, 0
 log_rem !byte 0, 0
 
@@ -902,7 +911,7 @@ active_index !byte 0
 log_string_length !byte 0
 log_string_index !byte 0
 
-bytes_free !text " log bytes free"
+bytes_free !text " LOG BYTES FREE"
         !byte 13, 0
 
 a_deref !text " [A]="
@@ -914,7 +923,7 @@ xy_addr !text " XY="
 copyright_usage
         !byte 14 ; upper/lowercase character sets
         !byte 147 ; clear screen
-        !text "c64 io mONITOR 1.26"
+        !text "c64 io mONITOR 1.27"
         !byte 13 ; carriage return
         !text "(c) 2021 BY dAVID r. vAN wAGNER"
         !byte 13
@@ -933,6 +942,8 @@ copyright_usage
         !text "sys 49155 : rem display counts"
         !byte 13
         !text "sys 49158 : rem display log"
+        !byte 13
+        !text "sys 49161 : rem clear log"
         !byte 13
         !text "rem stop + restore to stop hooks"
         !byte 13
