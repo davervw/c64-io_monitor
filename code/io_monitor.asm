@@ -16,7 +16,7 @@
 ; SYS 49161: REM clear log
 ; SYS 49164: REM set log start indirect ZP addr in x
 ; SYS 49167: REM set log end addr in x,y
-; SYS 49170: REM don't copy basic
+; SYS 49170: REM toggle don't copy basic
 
 start=$C000 ; machine language org
 chrout=$f1ca ;$ffd2
@@ -888,8 +888,9 @@ set_end
         stx log_end
         sty log_end+1
         rts
-basic_no_copy       
-        lda #$FF
+basic_no_copy
+        lda copy_basic?
+        eor #$FF
         sta copy_basic?
         rts
 
