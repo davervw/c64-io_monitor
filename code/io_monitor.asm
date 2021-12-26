@@ -12,8 +12,11 @@
 ; SYS 49152: REM initialize hooks and then running system from RAM (note can call again to clear out counts)
 ;   also sets log destination past BASIC program's RAM (55/56) if room before $A000
 ; SYS 49155: REM display hit counts
-; SYS 49158: REM display log of hits
+; SYS 49158: REM display log of hits, return log_ptr in x,y 
 ; SYS 49161: REM clear log
+; SYS 49164: REM set log start indirect ZP addr in x
+; SYS 49167: REM set log end addr in x,y
+; SYS 49170: REM toggle don't copy basic
 
 start=$C000 ; machine language org
 chrout=$f1ca ;$ffd2
@@ -24,6 +27,9 @@ chrout=$f1ca ;$ffd2
         jmp display_counts
         jmp display_log
         jmp clear_log
+        jmp set_start
+        jmp set_end
+        jmp basic_no_copy
 
 init_hooks
         jsr bank_norm
@@ -44,6 +50,9 @@ init_hooks
         ; copy BASIC $A000-$BFFF to RAM
         ; because there is no banking mode where BASIC is ROM, KERNEL is RAM
         ; stuck copying both to RAM
+copy_basic? = * + 1
+        lda #0
+        bne +
         lda #$A0
         sta $FC
 -       lda ($FB), y
@@ -56,15 +65,17 @@ init_hooks
         bne -
 
         ; change KERNEL JUMP TABLE in RAM so we get control for those entries
-        jsr hook_entries
++       jsr hook_entries
 
         lda #$05 ; BASIC/KERNEL ROMs replaced with RAM, leave I/O as is
         jsr bank_select
 
         ; copy 55/56 to log_ptr, and compute space available (up to $A000) in log_rem
-        lda 55 ; low byte end of BASIC RAM (variables) area
+        log_lsb = * + 1
+        lda 55 ; initally, low byte end of BASIC RAM (variables) area
         sta log_start
-        lda 56 ; high byte end of BASIC RAM (variables) area
+        log_msb = * + 1
+        lda 56 ; initially, high byte end of BASIC RAM (variables) area
         sta log_start+1
 
 clear_log
@@ -74,10 +85,10 @@ clear_log
         sta log_ptr+1
         jsr reset_counts
         sec
-        lda #$00
+        lda log_end
         sbc log_start
         sta log_rem
-        lda #$A0
+        lda log_end+1
         sbc log_start+1
         bcs + ; greater than or equal to, okay
         lda #0 ; less than, zero out log_rem
@@ -216,7 +227,9 @@ display_log
         bne -
         inc $fc
         bne -
-++      rts
+++      ldx log_ptr ; return log_ptr in x,y
+        ldy log_ptr+1
+        rts
 
 disp_hex
         pha
@@ -868,6 +881,21 @@ log_digit
         jmp log_char
 ++      rts
 
+set_start
+        stx log_lsb
+        inx
+        stx log msb
+        rts
+set_end
+        stx log_end
+        sty log_end+1
+        rts
+basic_no_copy
+        lda copy_basic?
+        eor #$FF
+        sta copy_basic?
+        rts
+
 kernal_entries
 ; offset, 3 bytes for JSR code to hook_entry, 3 bytes for original code(JMP or JMP(), 2 byte name of routine, and diag bit flags
 ; diag bit flags
@@ -972,7 +1000,7 @@ log_busy !byte 0
 log_start !byte 0, 0
 log_ptr !byte 0, 0
 log_rem !byte 0, 0
-
+log_end !byte 0, $A0
 active_index !byte 0
 
 log_string_length !byte 0
