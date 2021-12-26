@@ -12,7 +12,7 @@
 ; SYS 49152: REM initialize hooks and then running system from RAM (note can call again to clear out counts)
 ;   also sets log destination past BASIC program's RAM (55/56) if room before $A000
 ; SYS 49155: REM display hit counts
-; SYS 49158: REM display log of hits
+; SYS 49158: REM display log of hits, return log_ptr in x,y 
 ; SYS 49161: REM clear log
 ; SYS 49164: REM set log start indirect ZP addr in x
 ; SYS 49167: REM set log end addr in x,y
@@ -227,7 +227,9 @@ display_log
         bne -
         inc $fc
         bne -
-++      rts
+++      ldx log_ptr ; return log_ptr in x,y
+        ldy log_ptr+1
+        rts
 
 disp_hex
         pha
