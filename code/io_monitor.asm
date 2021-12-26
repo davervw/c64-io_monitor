@@ -14,7 +14,7 @@
 ; SYS 49155: REM display hit counts
 ; SYS 49158: REM display log of hits
 ; SYS 49161: REM clear log
-
+; SYS 49164: REM don't copy basic
 start=$C000 ; machine language org
 chrout=$f1ca ;$ffd2
 
@@ -24,7 +24,10 @@ chrout=$f1ca ;$ffd2
         jmp display_counts
         jmp display_log
         jmp clear_log
-
+        lda #$FF
+        sta copy_basic?
+        rts
+        
 init_hooks
         jsr bank_norm
         jsr disp_copyright_usage
@@ -44,6 +47,9 @@ init_hooks
         ; copy BASIC $A000-$BFFF to RAM
         ; because there is no banking mode where BASIC is ROM, KERNEL is RAM
         ; stuck copying both to RAM
+        copy_basic? = * + 1
+        lda #0
+        bne +
         lda #$A0
         sta $FC
 -       lda ($FB), y
@@ -56,7 +62,7 @@ init_hooks
         bne -
 
         ; change KERNEL JUMP TABLE in RAM so we get control for those entries
-        jsr hook_entries
++       jsr hook_entries
 
         lda #$05 ; BASIC/KERNEL ROMs replaced with RAM, leave I/O as is
         jsr bank_select
