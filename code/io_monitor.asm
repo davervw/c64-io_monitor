@@ -2,7 +2,7 @@
 ;
 ; by David R. Van Wagner
 ; dave@davevw.com
-; techwithdave.davevw.com
+; blog.davevw.com
 ;
 ; MIT LICENSE
 ;
@@ -122,6 +122,7 @@ reset_counts
         ldx #0
         txa
 -       sta call_counts, x
+        sta call_counts_high, x
         inx
         bne -
         rts
@@ -160,6 +161,7 @@ display_counts
         ldx #0 ; initialize index
 
 -       lda call_counts, x
+        ora call_counts_high, x
         beq + ; skip if zero
 
         txa
@@ -185,9 +187,14 @@ display_counts
         pla ; restore index
         pha ; save index again
         tax
-        lda call_counts, x ; retrieve non-zero count again for display
+        lda call_counts_high, x ; retrieve non-zero count again for display
         jsr disp_hex
 
+        pla ; restore index
+        pha ; save index again
+        tax
+        lda call_counts, x ; retrieve non-zero count again for display
+        jsr disp_hex
         lda #$0D ; carriage return
         jsr chrout
 
@@ -255,7 +262,8 @@ get_name ; INPUT .A is low byte of kernal jump table address $FFXX
         beq +                   ; branch if found it
         eor kernal_entries, x   ; restore .A
 
-        ; x+=10 skip size of non-matching entry record
+        ; x+=11 skip size of non-matching entry record
+        inx
         inx
         inx
         inx
@@ -345,26 +353,26 @@ hook_entries
         sta $FB
 
         lda #$20
-        inx
+        inx ; +1
         sta kernal_entries, x
 
         lda #<hook_entry
-        inx
+        inx ; +2
         sta kernal_entries, x
 
         lda #>hook_entry
-        inx
+        inx ; +3
         sta kernal_entries, x
 
         lda ($FB),y
-        inx
+        inx ; +4
         sta kernal_entries, x
         lda #$4C
         sta ($FB),y
 
         iny
         lda ($FB),y
-        inx
+        inx ; +5
         sta kernal_entries, x
         txa
         sec
@@ -376,7 +384,7 @@ hook_entries
 
         iny
         lda ($FB),y
-        inx
+        inx ; +6
         sta kernal_entries, x
         clc
         lda #>kernal_entries
@@ -384,16 +392,84 @@ hook_entries
         adc #$00
         sta ($FB),y
 
-        inx
-        inx
-        inx
-        inx
+        inx ; +7
+        inx ; +8
+        inx ; +9
+        inx ; +10
+        lda kernal_entries, x
+        beq ++ ; no vector
+        lda kernal_entries+3, x
+        bne ++ ; already hooked
+        jsr hook_vector
+++      inx ; +11
         ldy #$00
         beq -
 
 +       cli
 
         jsr disp_hooks
+
+        rts
+
+hook_vector
+        tay ; save $03XX vector offset in .Y
+
+        txa ; save .X to stack
+        pha
+
+        lda #<vector_entries
+        sta $fd
+        lda #>vector_entries
+        sta $fe
+        tya ; restore vector offset
+        tax ; save offset in .X
+        ldy #0
+
+-       eor ($fd),y ; look for vector offset match
+        bne + ; branch if no match
+        iny
+        iny
+        lda #<vector_entry
+        sta ($fd),y
+        iny
+        lda #>vector_entry
+        sta ($fd),y
+        iny
+        iny
+        lda $0300,x ; get vector low byte
+        sta ($fd),y
+        lda $0301,x ; get vector high byte
+        iny
+        sta ($fd),y
+        iny
+        iny
+        lda #<vector_exit
+        sta ($fd),y
+        iny
+        lda #>vector_exit
+        sta ($fd),y
+        tya
+        sec
+        sbc #(9-1)
+        clc
+        adc $fd
+        sta $0300,x
+        lda $fe
+        adc #0
+        sta $0301,x
+        txa
+        jmp ++
+
++       tya ; advance to next index
+        clc
+        adc #10
+        tay
+        txa ; restore offset to .A
+        cpy #vector_entries_max
+        bcc -
+
+++      pla ; restore .X
+        tax
 
         rts
 
@@ -411,8 +487,15 @@ disp_hooks
 
         lda kernal_entries, x ; display entry
         jsr disp_hex
+
+        lda kernal_entries+10, x
+        beq no_vector
+        lda #'*'
+        bne ++++
+no_vector
         lda #' '
-        jsr chrout
+++++    jsr chrout
+
         lda kernal_entries+8, x ; high address of name
         tay
         lda kernal_entries+7, x ; low address of name
@@ -440,9 +523,9 @@ sublen  sbc #0          ; subtract the length
         dex
         bne --
 
-+++     pla ; restore x, advance by 10, loop
++++     pla ; restore x, advance by 11, loop
         clc
-        adc #10
+        adc #11
         tax
         bcc -
 
@@ -462,6 +545,7 @@ hook_entry
         inc log_busy
 
         jsr get_index
+        jsr inc_count
         stx active_index
         jsr log_inputs
         jsr log_addr
@@ -496,6 +580,12 @@ hook_result
         plp
         rts
 
+vector_entry
+        rts
+
+vector_exit
+        rts
+
 get_index
         tsx ; caller trail is on the stack, so transfer stack index to X for our use
         lda $107, x ; get the low byte of the return to caller, should be our code in kernal_entries
@@ -508,9 +598,15 @@ get_index
         ldy #0 ; prep for dereferencing
         lda ($fb),y ; dereference pointer to get the $FFXX low byte
         tax ; going to use it as an index
+        rts
+
+inc_count
         inc call_counts, x
         bne + ; branch not zero
+        inc call_counts_high, x
+        bne + ; branch not zero
         dec call_counts, x ; oops, on overflow to zero, return to max value
+        dec call_counts_high, x ; oops, on overflow to zero, return to max value
 +       inc $d020 ; toggle border color showing something is happening
         rts
 
@@ -536,7 +632,7 @@ get_flags ; input .X index
         beq +
         tya
         clc
-        adc #10
+        adc #11
         tay
         bcc -
         lda #0
@@ -566,7 +662,7 @@ log_inputs
 
 +       pla
         tax
-        pha 
+        pha
         jsr get_flags
         and #$02 ; X INPUT
         beq +
@@ -588,7 +684,7 @@ log_inputs
 
 +       pla
         tax
-        pha 
+        pha
         jsr get_flags
         and #$08 ; LOAD input format, conditional on zero SA
         beq +
@@ -602,7 +698,7 @@ log_inputs
         jsr get_pushed_x
         jsr log_hex
 
-+       
++
         pla
         tax
         pha
@@ -869,6 +965,7 @@ log_digit
 ++      rts
 
 kernal_entries
+; IMPORTANT! must be 23 or fewer entries to not go over 255 bytes
 ; offset, 3 bytes for JSR code to hook_entry, 3 bytes for original code(JMP or JMP(), 2 byte name of routine, and diag bit flags
 ; diag bit flags
 ; $01 = display .A input
@@ -879,32 +976,67 @@ kernal_entries
 ; $20 = display .Y output
 ; $40 = display .X output
 ; $80 = display .A output
-        ;   $FFxx,JSR,<hk,>hk,JMP,<ad,>ad, <name,    >name,    diag_flags
-        !byte $A5, 00, 00, 00, 00, 00, 00, <n_acptr,  >n_acptr,  $80
-        !byte $C6, 00, 00, 00, 00, 00, 00, <n_chkin,  >n_chkin,  $02
-        !byte $C9, 00, 00, 00, 00, 00, 00, <n_chkout, >n_chkout, $02
-        !byte $CF, 00, 00, 00, 00, 00, 00, <n_chrin,  >n_chrin,  $80
-        !byte $D2, 00, 00, 00, 00, 00, 00, <n_chrout, >n_chrout, $01
-        !byte $A8, 00, 00, 00, 00, 00, 00, <n_ciout,  >n_ciout,  $00
-        !byte $E7, 00, 00, 00, 00, 00, 00, <n_clall,  >n_clall,  $00
-        !byte $C3, 00, 00, 00, 00, 00, 00, <n_close,  >n_close,  $01
-        !byte $CC, 00, 00, 00, 00, 00, 00, <n_clrchn, >n_clrchn, $00
-        !byte $E4, 00, 00, 00, 00, 00, 00, <n_getin,  >n_getin,  $80
-        !byte $B1, 00, 00, 00, 00, 00, 00, <n_listen, >n_listen, $01
-        !byte $D5, 00, 00, 00, 00, 00, 00, <n_load,   >n_load,   $69
-        !byte $C0, 00, 00, 00, 00, 00, 00, <n_open,   >n_open,   $00
-        !byte $B7, 00, 00, 00, 00, 00, 00, <n_readst, >n_readst, $80
-        !byte $D8, 00, 00, 00, 00, 00, 00, <n_save,   >n_save,   $10
-        !byte $93, 00, 00, 00, 00, 00, 00, <n_second, >n_second, $01
-        !byte $BA, 00, 00, 00, 00, 00, 00, <n_setlfs, >n_setlfs, $07
-        !byte $BD, 00, 00, 00, 00, 00, 00, <n_setnam, >n_setnam, $00
-        !byte $B4, 00, 00, 00, 00, 00, 00, <n_talk,   >n_talk,   $01
-        !byte $96, 00, 00, 00, 00, 00, 00, <n_tksa,   >n_tksa,   $00
-        !byte $AE, 00, 00, 00, 00, 00, 00, <n_unlsn,  >n_unlsn,  $00
-        !byte $AB, 00, 00, 00, 00, 00, 00, <n_untlk,  >n_untlk,  $00
+        ;   $FFxx,JSR,<hk,>hk,JMP,<ad,>ad, <name,    >name, diag_flags, 0x300 vector offset
+        !byte $A5, 00, 00, 00, 00, 00, 00, <n_acptr,  >n_acptr,  $80, 0x00
+        !byte $C6, 00, 00, 00, 00, 00, 00, <n_chkin,  >n_chkin,  $02, 0x1E
+        !byte $C9, 00, 00, 00, 00, 00, 00, <n_chkout, >n_chkout, $02, 0x20
+        !byte $CF, 00, 00, 00, 00, 00, 00, <n_chrin,  >n_chrin,  $80, 0x24
+        !byte $D2, 00, 00, 00, 00, 00, 00, <n_chrout, >n_chrout, $01, 0x26
+        !byte $A8, 00, 00, 00, 00, 00, 00, <n_ciout,  >n_ciout,  $00, 0x00
+        !byte $E7, 00, 00, 00, 00, 00, 00, <n_clall,  >n_clall,  $00, 0x2C
+        !byte $C3, 00, 00, 00, 00, 00, 00, <n_close,  >n_close,  $01, 0x1C
+        !byte $CC, 00, 00, 00, 00, 00, 00, <n_clrchn, >n_clrchn, $00, 0x22
+        !byte $E4, 00, 00, 00, 00, 00, 00, <n_getin,  >n_getin,  $80, 0x2A
+        !byte $B1, 00, 00, 00, 00, 00, 00, <n_listen, >n_listen, $01, 0x00
+        !byte $D5, 00, 00, 00, 00, 00, 00, <n_load,   >n_load,   $69, 0x30
+        !byte $C0, 00, 00, 00, 00, 00, 00, <n_open,   >n_open,   $00, 0x1A
+        !byte $B7, 00, 00, 00, 00, 00, 00, <n_readst, >n_readst, $80, 0x00
+        !byte $D8, 00, 00, 00, 00, 00, 00, <n_save,   >n_save,   $10, 0x32
+        !byte $93, 00, 00, 00, 00, 00, 00, <n_second, >n_second, $01, 0x00
+        !byte $BA, 00, 00, 00, 00, 00, 00, <n_setlfs, >n_setlfs, $07, 0x00
+        !byte $BD, 00, 00, 00, 00, 00, 00, <n_setnam, >n_setnam, $00, 0x00
+        !byte $B4, 00, 00, 00, 00, 00, 00, <n_talk,   >n_talk,   $01, 0x00
+        !byte $96, 00, 00, 00, 00, 00, 00, <n_tksa,   >n_tksa,   $00, 0x00
+        !byte $AE, 00, 00, 00, 00, 00, 00, <n_unlsn,  >n_unlsn,  $00, 0x00
+        !byte $AB, 00, 00, 00, 00, 00, 00, <n_untlk,  >n_untlk,  $00, 0x00
         !byte 0 ; end of table marker
 
+vector_entries
+        ; 0x3XX offset, JSR entry, JSR routine, JMP exit
+        !byte 0x1A, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00, 0x4C, 0x0, 0x00
+        !byte 0x1C, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00, 0x4C, 0x0, 0x00
+        !byte 0x1E, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00, 0x4C, 0x0, 0x00
+        !byte 0x20, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00, 0x4C, 0x0, 0x00
+        !byte 0x22, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00, 0x4C, 0x0, 0x00
+        !byte 0x24, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00, 0x4C, 0x0, 0x00
+        !byte 0x26, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00, 0x4C, 0x0, 0x00
+        !byte 0x2A, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00, 0x4C, 0x0, 0x00
+        !byte 0x2C, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00, 0x4C, 0x0, 0x00
+        !byte 0x30, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00, 0x4C, 0x0, 0x00
+        !byte 0x32, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00, 0x4C, 0x0, 0x00
+vector_entries_end
+        !byte 0
+vector_entries_max = (vector_entries_end-vector_entries)
+
 call_counts ; indexed by $FFXX low byte of entry point, not all bytes are used, but very simple container (256 bytes)
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+
+call_counts_high ; indexed by $FFXX low byte of entry point, not all bytes are used, but very simple container (256 bytes)
         !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         !byte 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
@@ -994,16 +1126,16 @@ copyright_usage
         !byte 14 ; upper/lowercase character sets
         !byte 147 ; clear screen
         !byte 18 ; reverse on
-        !text "c64 io mONITOR 1.28"
+        !text "c64 io mONITOR 1.29"
         !byte 146 ; reverse off
         !byte 13 ; carriage return
-        !text "tRACE/COUNT kernal i/o JUMP TABLE CALLS"
+        !text "tRACE/COUNT kernal io JMP TABLE&VECTORS"
         !byte 13
         !text "(c) 2021 BY dAVID r. vAN wAGNER"
         !byte 13
         !text "DAVE@DAVEVW.COM"
         !byte 13
-        !text "TECHWITHDAVE.DAVEVW.COM"
+        !text "BLOG.DAVEVW.COM"
         !byte 13
         !text "GITHUB.COM/DAVERVW"
         !byte 13
