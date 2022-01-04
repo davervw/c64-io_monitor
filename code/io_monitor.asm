@@ -173,9 +173,10 @@ display_counts
 
 -       lda call_counts, x
         ora call_counts_high, x
-        beq + ; skip if zero
+        bne +
+        jmp ++
 
-        txa
++       txa
         pha ; save index to stack
 
         ; display kernal address
@@ -217,15 +218,51 @@ sublen2 sbc #0
         tax
         lda call_counts, x ; retrieve non-zero count again for display
         jsr disp_hex
-        lda #$0D ; carriage return
+
+        lda #' '
+        jsr chrout
+
+        pla ; restore index
+        pha ; save index again
+        tax
+        jsr kernal_xx_to_offset
+        lda kernal_entries+10, x
+        beq +
+        pha ; save $03XX offset too
+        lda #'('
+        jsr chrout
+        lda #3
+        jsr disp_hex
+        pla ; restore $03XX offset
+        pha ; save again
+        jsr disp_hex
+        lda #')'
+        jsr chrout
+        lda #' '
+        jsr chrout
+        pla ; restore $03XX offset
+        tax
+        jsr vector_to_offset
+        txa ; save offset to vector_entries
+        pha
+        lda vector_entries+11, x
+        jsr disp_hex
+        pla
+        tax
+        lda vector_entries+10, x
+        jsr disp_hex
+
++       lda #$0D ; carriage return
         jsr chrout
 
         pla ; restore index
         tax
-+       inx
-        bne -
 
-        rts
+++      inx
+        beq +
+        jmp -
+
++       rts
 
 display_log
         lda log_start
@@ -449,10 +486,10 @@ hook_vector
         bne + ; branch if no match
         iny
         iny
-        lda #<vector_entry
+        lda #<vector_enter
         sta ($fd),y
         iny
-        lda #>vector_entry
+        lda #>vector_enter
         sta ($fd),y
         iny
         iny
@@ -604,7 +641,7 @@ hook_result
         plp
         rts
 
-vector_entry
+vector_enter
         php
         sei
         pha
@@ -617,12 +654,17 @@ vector_entry
         lda $105, x
         ldy $106, x
         tax
-        inx
-        bne +
-        iny
- +
- 
-        pla
+        jsr find_vector_by_stack_addr
+        bne + ; didn't find
+
+        inc vector_entries+10,x
+        bne + ; didn't overflow low byte
+        inc vector_entries+11,x
+        bne + ; didin't overflow high byte
+        dec vector_entries+10,x ; overflow 16-bit, so reset to max
+        dec vector_entries+11,x
+
++       pla
         tay
         pla
         tax
@@ -631,6 +673,26 @@ vector_entry
         rts
 
 vector_exit
+        rts
+
+find_vector_by_stack_addr ; INPUT x/y from stack return address of JSR .vector_enter
+; OUTPUT will be Z set if found, .X offset within vector_entries
+        stx findvl+1
+        sty findvh+1
+        sec
+findvl  lda #0
+        sbc #<(vector_entries+3)
+        tax
+findvh  lda #0
+        sbc #>(vector_entries+3)
+        bcc +
+        cmp #vector_entries_max
+        beq +
+        bcs +
+        lda #0 ; set Z
+        rts
++       ldx #vector_entries_max
+        lda #1 ; clear Z
         rts
 
 get_index
@@ -1011,6 +1073,59 @@ log_digit
         jmp log_char
 ++      rts
 
+kernal_xx_to_offset
+        ldx #0
+-       ldy kernal_entries,x
+        bne +
+        rts
++       cmp kernal_entries,x
+        bne +
+        rts ; found!
+
+        ; x+=11
++       inx
+        inx
+        inx
+        inx
+        inx
+        inx
+        inx
+        inx
+        inx
+        inx
+        inx
+        jmp -
+
+kernal_n_to_offset
+        clc
+        lda #0
+        cpx #0
+        beq +
+-       adc #11
+        dex
+        bne -
++       tax
+        rts
+
+vector_to_offset ; INPUT .A is $3XX vector address, OUTPUT .X offset in .vector_entries
+        ldx #0
+-       cmp vector_entries, x
+        beq ++
+
+        ; .X += 12
+        pha
+        clc
+        txa
+        adc #12
+        tax
+        pla
+
+        cpx #vector_entries_max
+        bcc -
+
++       ldx #$FF ; invalid
+++      rts
+
 kernal_entries
 ; IMPORTANT! must be 23 or fewer entries to not go over 255 bytes
 ; offset, 3 bytes for JSR code to hook_entry, 3 bytes for original code(JMP or JMP(), 2 byte name of routine, and diag bit flags
@@ -1023,6 +1138,7 @@ kernal_entries
 ; $20 = display .Y output
 ; $40 = display .X output
 ; $80 = display .A output
+        ; 11 byte records
         ;   $FFxx,JSR,<hk,>hk,JMP,<ad,>ad, <name,    >name, diag_flags, 0x300 vector offset
         !byte $A5, 00, 00, 00, 00, 00, 00, <n_acptr,  >n_acptr,  $80, 0x00
         !byte $C6, 00, 00, 00, 00, 00, 00, <n_chkin,  >n_chkin,  $02, 0x1E
@@ -1048,7 +1164,7 @@ kernal_entries
         !byte $AB, 00, 00, 00, 00, 00, 00, <n_untlk,  >n_untlk,  $00, 0x00
         !byte 0 ; end of table marker
 
-vector_entries
+vector_entries ; 12 bytes each
         ; 0x3XX offset, JSR entry, JSR routine, JMP exit, count(16-bit)
         !byte 0x1A, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00, 0x4C, 0x0, 0x00, 0x00, 0x00
         !byte 0x1C, 0x20, 0x00, 0x00, 0x20, 0x00, 0x00, 0x4C, 0x0, 0x00, 0x00, 0x00
