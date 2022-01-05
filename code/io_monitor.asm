@@ -173,7 +173,27 @@ display_counts
 
 -       lda call_counts, x
         ora call_counts_high, x
-        bne +
+        bne +       
+        jmp ++
+ 
+        ; ***WAS*** supposed to check vector if call_counts were zero, but not working yet, skipping over this part
+
+        txa ; save X
+        pha
+        jsr get_vector_count
+        bne +++ ; found a vector
+
+        ; no vector
+--      pla ; restore X and skip
+        tax
+        jmp ++
+
++++     stx $fb ; test count lo/hi if zero
+        tya
+        ora $fb
+        beq --
+        pla ; restore X and skip
+        tax
         jmp ++
 
 +       txa
@@ -225,9 +245,8 @@ sublen2 sbc #0
         pla ; restore index
         pha ; save index again
         tax
-        jsr kernal_xx_to_offset
-        lda kernal_entries+10, x
-        beq +
+        jsr get_vector_count
+        beq + ; branch if no vector
         pha ; save $03XX offset too
         lda #'('
         jsr chrout
@@ -241,15 +260,15 @@ sublen2 sbc #0
         lda #' '
         jsr chrout
         pla ; restore $03XX offset
+        pla ; restore index
+        pha ; save index again
         tax
-        jsr vector_to_offset
-        txa ; save offset to vector_entries
+        jsr get_vector_count ; repeat, because lost X/Y
+        txa
         pha
-        lda vector_entries+11, x
+        tya
         jsr disp_hex
         pla
-        tax
-        lda vector_entries+10, x
         jsr disp_hex
 
 +       lda #$0D ; carriage return
@@ -262,6 +281,20 @@ sublen2 sbc #0
         beq +
         jmp -
 
++       rts
+
+get_vector_count ; INPUT: .X $FFXX low byte address, A = $03XX vector low addr. or zero, OUTPUT Z clear if vector found, X/Y = low/high byte vector count
+        jsr kernal_xx_to_offset
+        lda kernal_entries+10, x
+        beq +
+        pha ; save $03XX vector low address
+        tax
+        jsr vector_to_offset
+        lda vector_entries+11, x
+        tay
+        lda vector_entries+10, x
+        tax
+        pla ; should clear Z flag because is non-zero based on branch above
 +       rts
 
 display_log
